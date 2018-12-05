@@ -1,0 +1,7 @@
+# build and install directory 
+[Bb]uild
+[Ii]nstall
+
+# kdevelop project files
+.kdev4/
+
