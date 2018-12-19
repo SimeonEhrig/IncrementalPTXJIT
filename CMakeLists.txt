@@ -16,8 +16,8 @@ find_package(cling REQUIRED)
 include_directories(include/)
 
 add_executable(incrementalptxjit
-               src/main.cpp s
-               rc/argc_helper.cpp)
+               src/main.cpp
+               src/argc_helper.cpp)
 
 target_link_libraries(incrementalptxjit
                       clingInterpreter
