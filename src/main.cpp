@@ -1,16 +1,26 @@
+#include <cling/Interpreter/Interpreter.h>
+#include <cling/Interpreter/Transaction.h>
+
+#include <llvm/Support/FileSystem.h>
+#include <llvm/Support/raw_ostream.h>
+
 #include <fstream>
 #include <ios>
 #include <iostream>
 #include <string>
+#include <system_error>
 
 #include "argc_helper.hpp"
 
 int main(int argc, char **argv) {
+  // create incremental compiler instance
+  cling::Interpreter interp(argc, argv, LLVMDIR);
+
   // input -> input from the shell
   // buffer -> will be used to store block commands, like functions
   // output -> store all inputs (and later the compiled code), will be extended
   // continuesly
-  std::string input, buffer, output;
+  std::string input, buffer;
   std::string prompt("> ");
   // will be used to format the input of block commands and store the
   // information, that the input is inside a block command
@@ -33,8 +43,10 @@ int main(int argc, char **argv) {
     if (!is.is_open()) {
       std::cerr << "ERROR: cannot open file " << argv[1] << std::endl;
     } else {
-      output = std::string(std::istreambuf_iterator<char>(is),
+      buffer = std::string(std::istreambuf_iterator<char>(is),
                            std::istreambuf_iterator<char>());
+      interp.process(buffer);
+      buffer = "";
       is.close();
     }
   }
@@ -47,27 +59,40 @@ int main(int argc, char **argv) {
     // quit
     if (input == ".q")
       return EXIT_SUCCESS;
-    // print the source code, which was inputed
+    // print llvm ir code of the last transaction
     else if (input == ".p")
-      std::cout << output;
+      interp.getLastTransaction()->getModule()->dump();
+    // execute command
+    else if (input.find(".e", 0) == 0) {
+      const std::string functionname = input.substr(3);
+      interp.process(functionname);
+    }
     // write source code to file
     else if (input.find(".f", 0) == 0) {
       const std::string path = input.substr(3);
-      std::fstream os(path, std::fstream::out);
-      if (!os.is_open()) {
+      std::error_code EC;
+      llvm::raw_fd_ostream os(path, EC, llvm::sys::fs::F_None);
+      if (EC) {
         std::cerr << "ERROR: cannot generate file " << path << std::endl;
       } else {
-        os << output;
+        const cling::Transaction *T = interp.getFirstTransaction();
+        // iterate over all transaction
+        while (T->getNext() != nullptr) {
+          T->getModule()->print(os, nullptr);
+          T = T->getNext();
+        }
+        // the last transaction is a exception
+        interp.getLastTransaction()->getModule()->print(os, nullptr);
         os.close();
       }
       // handle normal source
     } else {
       // if line is empty, add a empty line to the whole source code
       if (input == "") {
-        // add the empty line to the output or buffer, depending of the input
+        // skip the empty line or add it to buffer, depending of the input
         // before
         if (number_brackets == 0) {
-          output.append("\n");
+          continue;
         } else {
           buffer.append("\n");
         }
@@ -95,7 +120,7 @@ int main(int argc, char **argv) {
       // if there is no block command, simply compile line by line
       if (number_brackets == 0) {
         prompt = "> ";
-        output.append(input + "\n");
+        interp.process(input, 0, 0, true);
       } else {
         // for getting a block command, the buffer will be used
         // the indent will calculated depending of the level of block command
