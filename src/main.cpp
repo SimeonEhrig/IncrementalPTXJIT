@@ -11,15 +11,18 @@
 #include <system_error>
 
 #include "argc_helper.hpp"
+#include "backend.hpp"
 
 int main(int argc, char **argv) {
+  // the arguments change the mode of the interpreter instance
+  // now, it compiles ptx code incremental
+  const char *cling_argv[] = {"incrementalptxjit", "-x", "cuda", "-S",
+                              "--cuda-device-only"};
   // create incremental compiler instance
-  cling::Interpreter interp(argc, argv, LLVMDIR);
+  cling::Interpreter interp(5, cling_argv, LLVMDIR);
 
   // input -> input from the shell
   // buffer -> will be used to store block commands, like functions
-  // output -> store all inputs (and later the compiled code), will be extended
-  // continuesly
   std::string input, buffer;
   std::string prompt("> ");
   // will be used to format the input of block commands and store the
@@ -59,15 +62,18 @@ int main(int argc, char **argv) {
     // quit
     if (input == ".q")
       return EXIT_SUCCESS;
-    // print llvm ir code of the last transaction
-    else if (input == ".p")
-      interp.getLastTransaction()->getModule()->dump();
+    // print ptx code of the last transaction
+    else if (input == ".p") {
+      std::string ptx;
+      backend::generate_ptx(interp.getLastTransaction()->getModule(), ptx);
+      std::cout << ptx << std::endl;
+    }
     // execute command
     else if (input.find(".e", 0) == 0) {
       const std::string functionname = input.substr(3);
       interp.process(functionname);
     }
-    // write source code to file
+    // write ptx code to file
     else if (input.find(".f", 0) == 0) {
       const std::string path = input.substr(3);
       std::error_code EC;
@@ -75,14 +81,7 @@ int main(int argc, char **argv) {
       if (EC) {
         std::cerr << "ERROR: cannot generate file " << path << std::endl;
       } else {
-        const cling::Transaction *T = interp.getFirstTransaction();
-        // iterate over all transaction
-        while (T->getNext() != nullptr) {
-          T->getModule()->print(os, nullptr);
-          T = T->getNext();
-        }
-        // the last transaction is a exception
-        interp.getLastTransaction()->getModule()->print(os, nullptr);
+        backend::generate_ptx(interp.getLastTransaction()->getModule(), os);
         os.close();
       }
       // handle normal source

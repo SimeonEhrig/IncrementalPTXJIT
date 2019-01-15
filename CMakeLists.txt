@@ -17,12 +17,20 @@ include_directories(include/)
 
 add_executable(incrementalptxjit
                src/main.cpp
-               src/argc_helper.cpp)
+               src/argc_helper.cpp
+               src/backend.cpp)
 
 target_link_libraries(incrementalptxjit
                       clingInterpreter
                       LLVMSupport
-                      LLVMCore)
+                      LLVMCore
+                      LLVMNVPTXAsmPrinter
+                      LLVMNVPTXCodeGen
+                      LLVMNVPTXDesc
+                      LLVMNVPTXInfo
+                      #LLVMTarget
+                      LLVMMC
+                      )
 
 target_compile_options(incrementalptxjit PUBLIC
                        -DLLVMDIR="${LLVM_INSTALL_PREFIX}"
