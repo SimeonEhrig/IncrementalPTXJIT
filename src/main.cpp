@@ -49,6 +49,8 @@ int main(int argc, char **argv) {
       buffer = std::string(std::istreambuf_iterator<char>(is),
                            std::istreambuf_iterator<char>());
       interp.process(buffer);
+      std::string ptx;
+      backend::generate_ptx(interp.getLastTransaction()->getModule(), ptx);
       buffer = "";
       is.close();
     }
